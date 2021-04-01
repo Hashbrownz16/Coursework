@@ -2,6 +2,10 @@
 ## general information about each part
 # notes about why/what certain lines of code do
 
+#I forgot this, but everything in here needs the variable database passed in to act as the cursor object
+#otherwise it no work
+#also I need to properly debug everything still, there's a lot wrong with this rn
+
 #This is my main SQL functions and validation file
 #I should really go over this more thoroughly but the same template that works has been used for
 #every function in here so it might be OK
@@ -11,6 +15,7 @@ import re
 ##database shenanigans
 today = date.today()
 con = sql.connect("LabourersDB.db")
+
 
 def databaseConnection(): #Connects to the SQL database
     try:
@@ -28,25 +33,26 @@ def dictFactory(cursor, row): #returns dictionary from a tuple
     return dictionary
 ## getting stuff out of the database
 ###Labourers
-def getLabourersWithJob(job): #returns the IDs of all labourers with the job wanted, e.g. electrician, plumber, etc.
-    try:
-        command = "SELECT LabourerID FROM Labourers WHERE LabourerJob = ?" #I could use a switch statement here
-        cursor.execute(command,str(job)) #to make the code more robust. Remember to do so at some stage.
-        rows = cursor.fetchall()
-        return rows[0]["LabourerIDs"]
-    except:
-        print("Invalid job. Please try again.")
+def getLabourersWithJob(job,cursor): #returns the IDs of all labourers with the job wanted, e.g. electrician, plumber, etc.
+    print(type(job))
+    command = "SELECT LabourerID FROM Labourers WHERE LabourerJob=" #I could use a switch statement here
+    command = command+"'"+job+"'"
+    print(command)
+    cursor.execute(command) #to make the code more robust. Remember to do so at some stage.
+    rows = cursor.fetchall()
+    return rows[0]["LabourerID"]
 
-def getLabourerWage(labourerID): #Gets the wage of a labourer to allow a payment to be calculated, or to show a customer before hire
-    try: #try-except statement to catch exceptions, makes the program slightly more robust
-        command = "SELECT LabourerWage FROM Labourers WHERE LabourerID = ?" #I cannot use a switch statement here
-        cursor.execute(command,str(labourerID)) #as there are an infinite amount of possible inputs that are valid.
-        rows = cursor.fetchall()
-        return rows[0]["Labourer Wage"]
-    except:
-        print("Invalid ID. Please try again")
 
-def getLabourerName(labourerID): #Gets the name of the labourer to be shown to the customer
+def getLabourerWage(labourerID,cursor): #Gets the wage of a labourer to allow a payment to be calculated, or to show a customer before hire
+    #try-except statement to catch exceptions, makes the program slightly more robust
+        command = "SELECT LabourerWage FROM Labourers WHERE LabourerID =" #I cannot use a switch statement here
+        command = command+"'"+str(labourerID)+"'" #I need to make a proper ID verification function otherwise this is a very bad idea
+        cursor.execute(command) #as there are an infinite amount of possible inputs that are valid.
+        rows = cursor.fetchall()
+        return rows[0]["LabourerWage"]
+
+
+def getLabourerName(labourerID,cursor): #Gets the name of the labourer to be shown to the customer
     try:
         command = "SELECT LabourerName FROM Labourers WHERE LabourerID = ?"
         cursor.execute(command, str(labourerID))
@@ -55,32 +61,18 @@ def getLabourerName(labourerID): #Gets the name of the labourer to be shown to t
     except:
         print("Invalid ID. Please try again")
 
-def getLabourerNumber(labourerID): #Returns the phone number of the labourer so he can be contacted either by the agency or the client
+def getLabourerNumber(labourerID,cursor): #Returns the phone number of the labourer so he can be contacted either by the agency or the client
     command = """SELECT LabourerNumber FROM Labourers WHERE LabourerID = ?"""
     cursor.execute(command,str(labourerID))
     rows = cursor.fetchall()
     return rows[0]["LabourerNumber"]
 
-def newLabourer(cursor): #Creates a new record for a newly hired worker
+def newLabourer(cursor,name,DOB,job,wage,number): #Creates a new record for a newly hired worker
     try:
-        name = input("Labourer name")
-        year = int(input("Enter year born"))
-        month = int(input("Enter month born (number)"))#by making them ints first I can validate w try/except    
-        while month < 1 or month > 12: #Loops, forcing a valid number to be entered.
-            month = int(input("Enter a valid month(number)"))
-        day = int(input("Enter day born"))
-        DOB = str(year)+"/"+str(month)+"/"+str(day) #I cannot connect them together without making them strs again
-        number = int(input("Enter telephone number"))
-        while len(str(number)) > 11: #Loops, forcing a valid number to be entered.
-            number = int(input("Enter a valid number"))
-        wage = float(input("Enter the worker's wage")) #always below minimum wage for maximum profit
-        number = int(number)  #Further down the line I could use Regex to make sure these inputs adhere to a normal structure to avoid injections
         command = "SELECT max(LabourerID) FROM Labourers"
         cursor.execute(command)
         rows = cursor.fetchall()
-        
         labourid = int(rows[0]["max(LabourerID)"]) + 1
-        job = input("Enter job") #Will need to change this if I decide to limit the number of available jobs, maybe make a dropdown menu?
         command = """INSERT INTO Labourers(LabourerID,LabourerName,LabourerDOB,LabourerJob,LabourerWage, LabourerNumber)
         VALUES({},"{}","{}","{}",{},{})""".format(labourid, str(name),str(DOB),str(job),float(wage),int(number))
         cursor.execute(command) #Inserting parameters allows me to avoid SQL Injection attacks 
@@ -91,7 +83,7 @@ def newLabourer(cursor): #Creates a new record for a newly hired worker
 
 ##Customers!!!!!
 #Remember to use the HASHBYTES SQL function to encrypt passwords, using a salt to help protect against more attacks
-def newCustomer(): #creates a new customer to extort for cash
+def newCustomer(cursor): #creates a new customer to extort for cash
     try: #Need to parameterise this at some point
         name = input("Enter your name")
         month = str(int(input("Enter the month you were born (number")))
@@ -122,7 +114,7 @@ def newCustomer(): #creates a new customer to extort for cash
     except:
         pass
 
-def getCustomerAddress(customerid):
+def getCustomerAddress(customerid,cursor):
     try:
         command = """SELECT CustomerAddress FROM Customers WHERE CustomerID = ?"""
         cursor.execute(command,str(customerid))
@@ -132,7 +124,7 @@ def getCustomerAddress(customerid):
     except:
         pass
 
-def getCustomerPostcode(customerid):
+def getCustomerPostcode(customerid,cursor):
     try:
         command = """ SELECT CustomerPostcode FROM Customers WHERE CustomerID = ?"""
         cursor.execute(command,str(customerid))
@@ -142,7 +134,7 @@ def getCustomerPostcode(customerid):
     except:
         pass
 
-def getCustomerName(customerid):
+def getCustomerName(customerid,cursor):
     try:
         command = """SELECT CustomerName FROM Customers WHERE CustomerID = ?"""
         cursor.execute(command,str(customerid))
@@ -152,11 +144,11 @@ def getCustomerName(customerid):
     except:
         pass
 
-def getCustomerDOB(customerid):
+def getCustomerDOB(customerid,cursor):
     try:
-        command = """SELECT CustomerDOB FROM Customers WHERE CustomerID = ?"""
-        cursor.execute(command,str(customerid))
-        rows = cursor.fetchall()
+        command = """SELECT CustomerDOB FROM Customers WHERE CustomerID = ?""" # The only reason these work now is because
+        cursor.execute(command,str(customerid)) # my IDs are only single digits. Once they get bigger i am screwed
+        rows = cursor.fetchall() #need to fix
         dob = rows[0]["CustomerDOB"]
         return dob
     except:
@@ -164,12 +156,12 @@ def getCustomerDOB(customerid):
 
 ###Orders
 
-def newOrder():
+def newOrder(cursor):
     try:
         command = """SELECT max(OrderID) FROM Orders"""
         cursor.execute(command)
         rows = cursor.fetchall()
-        orderid = rows[0]["OrderID"]+1
+        orderid = int(rows[0]["max(OrderID)"])+1
         command = """INSERT INTO Orders(OrderID,LabourerID,CustomerID,OrderStart,OrderEnd,PaymentID) VALUES(?,?,?,?,?,?) """.format(int(orderid),int(labourerid),int(customerid),str(orderstart),str(orderend),int(paymentid))
         cursor.execute(command)
         con.commit()
@@ -178,22 +170,23 @@ def newOrder():
 
 ###Payments
 
-def newPayment():
+def newPayment(orderid, amountpaid,datepaid,cursor):
     try:
         command = """SELECT max(PaymentID) FROM Payments"""
         cursor.execute(command)
         rows = cursor.fetchall()
-        paymentid = rows[0]["PaymentID"] + 1
-        command = """INSERT INTO Payments(PaymentID,OrderID,AmountPaid,DatePaid) VALUES(?,?,?,?) """.format(int(paymentid),int(orderid),float(amountpaid),str(datepaid))
-        cursor.execute(command)
+        paymentid = int(rows[0]["max(PaymentID)"]) + 1
+        command = """INSERT INTO Payments(PaymentID,OrderID,AmountPaid,DatePaid) VALUES({},{},{},"{}")""".format(int(paymentid),int(orderid),float(amountpaid),datepaid)
+        cursor.execute(command) #I don't know why, but having "" around anything which is a string is very important
         con.commit()
     except:
         pass
 
 
+
 def isPostcode(postcode): #THIS WORKS NOW
-    postcode.replace(" ","")  #Removes whitespace very nice to work with yes mhm
-    postcode.upper()
+    postcode = postcode.replace(" ","")  #Removes whitespace very nice to work with yes mhm
+    postcode = postcode.upper()
     reg = "([Gg][Ii][Rr] 0[Aa]{2})|((([A-Za-z][0-9]{1,2})|(([A-Za-z][A-Ha-hJ-Yj-y][0-9]{1,2})|(([A-Za-z][0-9][A-Za-z])|([A-Za-z][A-Ha-hJ-Yj-y][0-9][A-Za-z]?))))\s?[0-9][A-Za-z]{2})" #I definitely wrote this myself mhm
     regRe = re.compile(reg) #Creates a regular expression object
     true = regRe.match(postcode) #If this does not match the pattern, returns None
@@ -233,7 +226,11 @@ def passwordHash(password): #This gives a number which I can use to store my use
         print(total)
     except:
         pass
+    
+database = databaseConnection() #Here, database is essentially my cursor object. I need to pass it in to any functions I run.
+#I should put this bit inside the main function to make it simpler probably
+#Will make it more readable too most likely.
         
 
-passwordHash(str(77))
+getLabourerWage(1,database)
     
